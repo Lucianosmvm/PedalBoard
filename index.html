@@ -34,7 +34,7 @@ html,body{margin:0;background:#2b2b2e;color:#eee;font-family:'IBM Plex Mono',mon
 /* board */
 .board-section{background:#232325;border:1px solid #3a3a40;border-radius:10px;padding:18px 10px 10px;margin-bottom:6px;}
 .board-hint{font-size:10.5px;color:#76767c;padding:0 10px 12px;letter-spacing:.02em;}
-.board-scroll{overflow-x:auto;padding-bottom:8px;}
+.board-scroll{overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;}
 .board{position:relative;display:flex;align-items:flex-end;gap:34px;min-height:230px;padding:30px 50px;min-width:max-content;}
 .board.empty::before{content:'Arraste pedais da biblioteca abaixo até aqui';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#54545a;font-size:13px;letter-spacing:.04em;}
 .cables{position:absolute;top:0;left:0;pointer-events:none;}
@@ -81,7 +81,7 @@ html,body{margin:0;background:#2b2b2e;color:#eee;font-family:'IBM Plex Mono',mon
 .cat-tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:8px;padding-bottom:4px;}
 .cat-tab{flex-shrink:0;background:#26262a;border:1px solid #3a3a42;color:#9a9aa0;font-family:'Oswald';font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;padding:6px 12px;border-radius:16px;cursor:pointer;}
 .cat-tab.active{background:#e2a23a;color:#1c1c1e;border-color:#e2a23a;}
-.lib-strip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;}
+.lib-strip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;-webkit-overflow-scrolling:touch;}
 .lib-pedal{flex-shrink:0;width:84px;border-radius:6px;padding:8px 5px;text-align:center;cursor:grab;box-shadow:0 3px 6px rgba(0,0,0,.4);border:1px solid rgba(0,0,0,.3);}
 .lib-pedal:active{cursor:grabbing;}
 .lib-pedal .ln{font-family:'Oswald';font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.02em;line-height:1.2;}
@@ -716,20 +716,35 @@ function finishDrop(x,y,payload){
     if(targetId || overBoard) addOrSwap(payload.id);
   }
 }
-function makeDraggable(el, payload){
-  el.style.touchAction='none';
-  let ghost=null, startX=0, startY=0, dragging=false, pointerId=null;
+function makeDraggable(el, payload, opts={}){
+  const requireVertical=!!opts.requireVertical;
+  el.style.touchAction = requireVertical ? 'pan-x' : 'none';
+  let ghost=null, startX=0, startY=0, dragging=false, pointerId=null, bailed=false;
+  function cleanupListeners(){
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    try{ el.releasePointerCapture(pointerId); }catch(e){}
+  }
   function onMove(ev){
-    if(ev.pointerId!==pointerId) return;
+    if(ev.pointerId!==pointerId || bailed) return;
     const dx=ev.clientX-startX, dy=ev.clientY-startY;
-    if(!dragging && Math.hypot(dx,dy)>6){
-      dragging=true;
-      const r=el.getBoundingClientRect();
-      ghost=el.cloneNode(true);
-      ghost.classList.add('drag-ghost');
-      ghost.style.width=r.width+'px';
-      document.body.appendChild(ghost);
-      el.classList.add('drag-source-active');
+    if(!dragging){
+      const dist=Math.hypot(dx,dy);
+      if(dist>6){
+        const verticalDominant = Math.abs(dy) > Math.abs(dx)*1.15;
+        if(requireVertical && !verticalDominant){
+          // horizontal swipe on a scrollable strip: let the browser scroll natively, don't drag
+          bailed=true; cleanupListeners(); pointerId=null; return;
+        }
+        dragging=true;
+        const r=el.getBoundingClientRect();
+        ghost=el.cloneNode(true);
+        ghost.classList.add('drag-ghost');
+        ghost.style.width=r.width+'px';
+        document.body.appendChild(ghost);
+        el.classList.add('drag-source-active');
+      }
     }
     if(dragging && ghost){
       ghost.style.left=(ev.clientX-ghost.offsetWidth/2)+'px';
@@ -739,10 +754,8 @@ function makeDraggable(el, payload){
     }
   }
   function onUp(ev){
-    if(ev.pointerId!==pointerId) return;
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
+    if(ev.pointerId!==pointerId || bailed){ bailed=false; return; }
+    cleanupListeners();
     if(dragging) finishDrop(ev.clientX, ev.clientY, payload);
     if(ghost){ ghost.remove(); ghost=null; }
     el.classList.remove('drag-source-active');
@@ -751,7 +764,7 @@ function makeDraggable(el, payload){
   }
   el.addEventListener('pointerdown', (ev)=>{
     if(ev.button!=null && ev.button!==0) return;
-    pointerId=ev.pointerId; startX=ev.clientX; startY=ev.clientY; dragging=false;
+    pointerId=ev.pointerId; startX=ev.clientX; startY=ev.clientY; dragging=false; bailed=false;
     try{ el.setPointerCapture(pointerId); }catch(e){}
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
@@ -893,7 +906,7 @@ function renderLibStrip(){
     const lp=document.createElement('div'); lp.className='lib-pedal';
     lp.style.background=e.color; lp.style.color=e.dark?'#1c1c1e':'#f3f0e8';
     lp.innerHTML = `<div class="dot"></div><div class="ln">${e.label}</div><div class="ls">${e.sub}</div>`;
-    makeDraggable(lp, {kind:'library', id:id});
+    makeDraggable(lp, {kind:'library', id:id}, {requireVertical:true});
     lp.addEventListener('click',()=> addOrSwap(id));
     libStripEl.appendChild(lp);
   });
