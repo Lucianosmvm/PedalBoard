@@ -63,6 +63,12 @@ html,body{margin:0;background:#2b2b2e;color:#eee;font-family:'IBM Plex Mono',mon
 .pedal-foot.on .ring{border-color:#e2402a;box-shadow:0 0 9px rgba(226,64,42,.9);}
 .pedal-bypassed .pedal-plate{filter:grayscale(.55) brightness(.8);}
 
+/* drag & drop visual feedback (pointer-based, works for mouse and touch) */
+.drag-ghost{position:fixed;top:0;left:0;pointer-events:none;z-index:1000;opacity:.88;transform:scale(1.06);box-shadow:0 12px 28px rgba(0,0,0,.55);border-radius:8px;}
+.drag-source-active{opacity:.3;}
+.pedal.drop-target-hover .pedal-plate{outline:2px dashed #e2a23a;outline-offset:3px;}
+.board.drop-target-hover{outline:2px dashed #e2a23a;outline-offset:-8px;background:rgba(226,162,58,.06);border-radius:8px;}
+
 /* knob */
 .knob-unit{display:flex;flex-direction:column;align-items:center;gap:3px;width:44px;user-select:none;}
 .knob-dial{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#666,#1c1c1e 75%);border:1px solid #111;position:relative;cursor:ns-resize;box-shadow:0 1px 3px rgba(0,0,0,.5);}
@@ -122,6 +128,68 @@ canvas#scope{width:100%;height:80px;background:#0b0d08;border:1px solid #2a2f1c;
 .string-btn{flex:1;background:linear-gradient(180deg,#332217,#231910);border:1px solid #4a3320;color:#eee;font-family:'Oswald';font-weight:600;font-size:12px;padding:11px 0;border-radius:5px;cursor:pointer;text-align:center;}
 .string-btn small{display:block;font-family:'IBM Plex Mono';font-weight:400;font-size:7.5px;color:#8a8a90;margin-top:2px;}
 footer{margin-top:22px;text-align:center;color:#54545a;font-size:9.5px;line-height:1.7;}
+
+/* ---------- mobile layout ---------- */
+@media (max-width:640px){
+  .wrap{padding:10px 6px 36px;}
+  .top{gap:8px;}
+  .brand{font-size:16px;}
+  .brand small{font-size:8px;letter-spacing:.12em;}
+  .power-btn{padding:7px 10px;font-size:10.5px;}
+
+  .lcd{padding:8px 10px;gap:8px;margin-bottom:12px;}
+  .lcd-patch{font-size:14px;width:130px;}
+  .lcd-chain{font-size:8.5px;max-width:100%;}
+
+  .presets{gap:5px;margin-bottom:10px;}
+  .preset-btn{font-size:9.5px;padding:5px 9px;}
+  .clear-btn{font-size:9.5px;padding:5px 9px;}
+
+  .banks-row{gap:5px;margin-bottom:12px;}
+  .bank-save-btn{font-size:9.5px;padding:6px 10px;}
+  .bank-chip{font-size:9px;padding:5px 5px 5px 10px;}
+
+  .board-section{padding:10px 5px 5px;margin-bottom:12px;}
+  .board-hint{font-size:9px;padding:0 6px 8px;line-height:1.4;}
+  .board{gap:18px;padding:18px 26px;min-height:175px;}
+  .pedal{width:92px;}
+  .pedal.wide{width:140px;}
+  .pedal-name{font-size:10.5px;}
+  .pedal-sub{font-size:6.5px;}
+  .pedal-remove{width:14px;height:14px;font-size:9px;line-height:14px;}
+  .pedal-foot{width:28px;height:28px;margin-top:3px;}
+  .knob-unit{width:36px;gap:2px;}
+  .knob-dial{width:28px;height:28px;}
+  .knob-pointer{height:10px;top:2px;transform-origin:50% 12px;}
+  .knob-label{font-size:6.8px;}
+  .knob-value{font-size:7.5px;}
+  .pedal-extra button{font-size:7.5px;padding:2px 5px;}
+
+  .library{padding:8px;margin-bottom:12px;}
+  .cat-tab{font-size:9.5px;padding:5px 10px;}
+  .lib-pedal{width:70px;padding:6px 4px;}
+  .lib-pedal .ln{font-size:8.8px;}
+  .lib-pedal .ls{font-size:6.5px;}
+
+  .amp-section{padding:10px 10px;margin-bottom:12px;}
+  .amp-section h3{font-size:9.5px;}
+  .amp-grid{flex-direction:column;gap:10px;}
+  .amp-block{width:100%;justify-content:flex-start;padding:9px 10px;}
+  .amp-select{font-size:10px;padding:6px 8px;max-width:120px;}
+  .amp-pill{font-size:9px;padding:4px 7px;}
+  .amp-foot{width:24px;height:24px;}
+
+  .deck{gap:10px;margin-top:12px;}
+  .panel{padding:10px 12px;}
+  .panel h3{font-size:10px;}
+  canvas#scope{height:64px;}
+
+  .strings{gap:4px;}
+  .string-btn{padding:9px 0;font-size:11px;}
+  .string-btn small{font-size:7px;}
+
+  footer{font-size:8.5px;margin-top:18px;}
+}
 </style>
 </head>
 <body>
@@ -467,8 +535,10 @@ function initAudio(){
   const instrumentBus=ctx.createGain(); instrumentBus.connect(preChainBus);
   const micGain=ctx.createGain(); micGain.gain.value=0; micGain.connect(preChainBus);
   const masterGain=ctx.createGain(); masterGain.gain.value=state.master/100;
+  const limiter=ctx.createDynamicsCompressor();
+  limiter.threshold.value=-4; limiter.knee.value=2; limiter.ratio.value=20; limiter.attack.value=0.001; limiter.release.value=0.12;
   const analyser=ctx.createAnalyser(); analyser.fftSize=1024;
-  masterGain.connect(analyser); analyser.connect(ctx.destination);
+  masterGain.connect(limiter); limiter.connect(analyser); analyser.connect(ctx.destination);
   const modules={
     znr:buildZNR(ctx,state.params.znr), comp:buildCOMP(ctx,state.params.comp),
     wah:buildWAH(ctx,state.params.wah,state.types.wah||'AutoWah'),
@@ -478,7 +548,7 @@ function initAudio(){
     delay:buildDELAY(ctx,state.params.delay), reverb:buildREVERB(ctx,state.params.reverb),
   };
   Object.keys(modules).forEach(id=> modules[id].setOn(state.on[id]||false, ctx));
-  audio={ctx,preChainBus,instrumentBus,micGain,masterGain,analyser,modules};
+  audio={ctx,preChainBus,instrumentBus,micGain,masterGain,limiter,analyser,modules};
   connectChain(); startScope();
 }
 function connectChain(){
@@ -621,6 +691,74 @@ function createKnob({label,value,min=0,max=100,onInput}){
   return wrap;
 }
 
+/* ---------- unified pointer-based drag & drop (works with mouse AND touch) ---------- */
+function highlightDropTarget(x,y){
+  document.querySelectorAll('.drop-target-hover').forEach(n=>n.classList.remove('drop-target-hover'));
+  const elUnder=document.elementFromPoint(x,y);
+  const pedalEl=elUnder && elUnder.closest && elUnder.closest('.pedal');
+  if(pedalEl) pedalEl.classList.add('drop-target-hover');
+  else { const inBoard=elUnder && elUnder.closest && elUnder.closest('#board'); if(inBoard) boardEl.classList.add('drop-target-hover'); else boardEl.classList.remove('drop-target-hover'); }
+}
+function clearDropHighlights(){
+  document.querySelectorAll('.drop-target-hover').forEach(n=>n.classList.remove('drop-target-hover'));
+}
+function finishDrop(x,y,payload){
+  const elUnder=document.elementFromPoint(x,y);
+  const pedalEl=elUnder && elUnder.closest && elUnder.closest('.pedal');
+  const targetId=pedalEl && pedalEl.dataset.id;
+  if(payload.kind==='board'){
+    if(targetId && targetId!==payload.id){
+      const from=state.board.indexOf(payload.id), to=state.board.indexOf(targetId);
+      if(from>=0 && to>=0){ state.board.splice(from,1); state.board.splice(to,0,payload.id); markEdited(); connectChain(); renderBoard(); }
+    }
+  } else if(payload.kind==='library'){
+    const overBoard = elUnder && elUnder.closest && elUnder.closest('#board');
+    if(targetId || overBoard) addOrSwap(payload.id);
+  }
+}
+function makeDraggable(el, payload){
+  el.style.touchAction='none';
+  let ghost=null, startX=0, startY=0, dragging=false, pointerId=null;
+  function onMove(ev){
+    if(ev.pointerId!==pointerId) return;
+    const dx=ev.clientX-startX, dy=ev.clientY-startY;
+    if(!dragging && Math.hypot(dx,dy)>6){
+      dragging=true;
+      const r=el.getBoundingClientRect();
+      ghost=el.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      ghost.style.width=r.width+'px';
+      document.body.appendChild(ghost);
+      el.classList.add('drag-source-active');
+    }
+    if(dragging && ghost){
+      ghost.style.left=(ev.clientX-ghost.offsetWidth/2)+'px';
+      ghost.style.top=(ev.clientY-24)+'px';
+      highlightDropTarget(ev.clientX, ev.clientY);
+      ev.preventDefault();
+    }
+  }
+  function onUp(ev){
+    if(ev.pointerId!==pointerId) return;
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+    if(dragging) finishDrop(ev.clientX, ev.clientY, payload);
+    if(ghost){ ghost.remove(); ghost=null; }
+    el.classList.remove('drag-source-active');
+    clearDropHighlights();
+    dragging=false; pointerId=null;
+  }
+  el.addEventListener('pointerdown', (ev)=>{
+    if(ev.button!=null && ev.button!==0) return;
+    pointerId=ev.pointerId; startX=ev.clientX; startY=ev.clientY; dragging=false;
+    try{ el.setPointerCapture(pointerId); }catch(e){}
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  });
+}
+
 function addOrSwap(catalogId){
   const e=CATALOG[catalogId];
   const idx=state.board.findIndex(cid=> CATALOG[cid].slot===e.slot);
@@ -653,6 +791,7 @@ function renderPedal(catalogId){
   const e=CATALOG[catalogId]; const slot=e.slot;
   const pedal=document.createElement('div'); pedal.className='pedal'+(e.wide?' wide':'')+(state.on[slot]?'':' pedal-bypassed');
   pedal.draggable=false;
+  pedal.dataset.id=catalogId;
 
   const plate=document.createElement('div'); plate.className='pedal-plate';
   plate.style.background=e.color; plate.style.color=e.dark?'#1c1c1e':'#f3f0e8';
@@ -665,9 +804,8 @@ function renderPedal(catalogId){
   rm.onclick=(ev)=>{ ev.stopPropagation(); removePedal(catalogId); };
   plate.appendChild(rm);
 
-  const head=document.createElement('div'); head.className='pedal-head'; head.draggable=true;
-  head.addEventListener('dragstart',(ev)=>{ dragSource='board'; dragPayload=catalogId; pedal.style.opacity='.4'; });
-  head.addEventListener('dragend',()=>{ pedal.style.opacity='1'; });
+  const head=document.createElement('div'); head.className='pedal-head';
+  makeDraggable(head, {kind:'board', id:catalogId});
   const nm=document.createElement('div'); nm.className='pedal-name'; nm.textContent=e.label;
   const sb=document.createElement('div'); sb.className='pedal-sub'; sb.textContent=e.sub;
   head.append(nm,sb); plate.appendChild(head);
@@ -704,19 +842,6 @@ function renderPedal(catalogId){
   plate.appendChild(foot);
 
   pedal.appendChild(plate);
-
-  pedal.addEventListener('dragover',(ev)=>{ ev.preventDefault(); });
-  pedal.addEventListener('drop',(ev)=>{
-    ev.preventDefault();
-    if(dragSource==='board' && dragPayload && dragPayload!==catalogId){
-      const from=state.board.indexOf(dragPayload), to=state.board.indexOf(catalogId);
-      state.board.splice(from,1); state.board.splice(to,0,dragPayload);
-      markEdited(); connectChain(); renderBoard();
-    } else if(dragSource==='library' && dragPayload){
-      addOrSwap(dragPayload);
-    }
-    dragSource=null; dragPayload=null;
-  });
   return pedal;
 }
 
@@ -751,14 +876,6 @@ function drawCables(svg){
   curve(prev, {x: boardEl.scrollWidth, y: boardRect.height/2});
 }
 
-boardEl.addEventListener('dragover',(ev)=>ev.preventDefault());
-boardEl.addEventListener('drop',(ev)=>{
-  if(ev.target!==boardEl) return; // pedal-level handler already covers drops on pedals
-  ev.preventDefault();
-  if(dragSource==='library' && dragPayload) addOrSwap(dragPayload);
-  dragSource=null; dragPayload=null;
-});
-
 function renderCatTabs(){
   catTabsEl.innerHTML='';
   CATEGORIES.forEach(cat=>{
@@ -773,10 +890,10 @@ function renderLibStrip(){
   libStripEl.innerHTML='';
   Object.keys(CATALOG).filter(id=> activeCat==='ALL' || CATALOG[id].category===activeCat).forEach(id=>{
     const e=CATALOG[id];
-    const lp=document.createElement('div'); lp.className='lib-pedal'; lp.draggable=true;
+    const lp=document.createElement('div'); lp.className='lib-pedal';
     lp.style.background=e.color; lp.style.color=e.dark?'#1c1c1e':'#f3f0e8';
     lp.innerHTML = `<div class="dot"></div><div class="ln">${e.label}</div><div class="ls">${e.sub}</div>`;
-    lp.addEventListener('dragstart',()=>{ dragSource='library'; dragPayload=id; });
+    makeDraggable(lp, {kind:'library', id:id});
     lp.addEventListener('click',()=> addOrSwap(id));
     libStripEl.appendChild(lp);
   });
