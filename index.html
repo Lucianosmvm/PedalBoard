@@ -142,7 +142,7 @@ footer{margin-top:22px;text-align:center;color:#54545a;font-size:9.5px;line-heig
   <div class="banks-row" id="banksRow"></div>
 
   <div class="board-section">
-    <div class="board-hint">Arraste pedais da biblioteca para a prancha. Solte sobre um pedal do mesmo tipo para trocá-lo. Arraste pelo topo do pedal para reordenar. Clique no footswitch para ativar/desativar.</div>
+    <div class="board-hint">Arraste pedais e amplificadores (categoria AMP) da biblioteca para a prancha, na posição que quiser. Solte sobre um pedal/amp do mesmo tipo para trocá-lo. Arraste pelo topo do pedal para reordenar. Clique no footswitch para ativar/desativar.</div>
     <div class="board-scroll"><div class="board" id="board"></div></div>
   </div>
 
@@ -152,7 +152,7 @@ footer{margin-top:22px;text-align:center;color:#54545a;font-size:9.5px;line-heig
   </div>
 
   <div class="amp-section" id="ampSection">
-    <h3>Amplificador &amp; Cabine — fim de cadeia, sempre presente</h3>
+    <h3>EQ &amp; Cabine — fim de cadeia, sempre presente</h3>
     <div class="amp-grid" id="ampGrid"></div>
   </div>
 
@@ -206,7 +206,7 @@ const CATALOG = {
   hallreverb: {slot:'reverb', label:'Hall Reverb', sub:'REVERB', category:'REVERB', color:'#d8dee0', dark:true,
     knobs:[{key:'Decay',label:'Decay'},{key:'Mix',label:'Mix'}], defaults:{Decay:70,Mix:45}},
 };
-const CATEGORIES = ['ALL','DYNAMICS','FILTER','MODULATOR','DELAY','REVERB'];
+const CATEGORIES = ['ALL','AMP','DYNAMICS','FILTER','MODULATOR','DELAY','REVERB'];
 
 const AMP_MODELS = [
   ['Z Clean',0.08],['FD Clean',0.12],['VX Clean',0.15],['JC Clean',0.13],['HW Clean',0.18],
@@ -216,6 +216,17 @@ const AMP_MODELS = [
   ['dist+',0.60],['HotBox',0.45],['FuzzFace',0.78],['BigMuff',0.82],['MetalZone',0.88],
   ['DS-1',0.66],['Z Stack',0.92],['ExtremeDS',1.00],['Z OD',0.40],
 ];
+function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); }
+AMP_MODELS.forEach(([name,boost])=>{
+  const color = boost<0.2 ? '#d9b85c' : boost<0.45 ? '#d9622b' : boost<0.75 ? '#a8341f' : '#1c1c1e';
+  const dark = boost<0.2;
+  const family = boost<0.2?'Clean':boost<0.45?'Crunch':boost<0.75?'Drive':'High Gain';
+  CATALOG['amp_'+slugify(name)] = {
+    slot:'preamp', type:name, label:name, sub:family.toUpperCase()+' AMP', category:'AMP', color, dark, wide:true,
+    knobs:[{key:'Gain',label:'Gain'},{key:'Tone',label:'Tone'},{key:'Level',label:'Level'}],
+    defaults:{Gain:Math.round(32+boost*48), Tone:50, Level:60},
+  };
+});
 
 function defaultParams(){
   return {
@@ -225,18 +236,18 @@ function defaultParams(){
     delay:{Time:35,FeedBack:30,Mix:35}, reverb:{Decay:35,Mix:30},
   };
 }
-const state = { board:[], on:{preamp:true,eq:true,cabinet:true}, types:{preamp:'FD Clean'}, params:defaultParams(), master:70, edited:false };
+const state = { board:[], on:{eq:true,cabinet:true}, types:{}, params:defaultParams(), master:70, edited:false };
 
 const PRESETS = [
-  {name:'Z Clean', cfg:{board:['compressor'], types:{preamp:'FD Clean'}, on:{preamp:true,eq:true,cabinet:true,comp:true},
-    params:{preamp:{Gain:20,Tone:48,Level:60}, eq:{Bass:52,Mid:48,Treble:55}, cabinet:{Depth:35,mic:'Dyna',pos:0}}}},
-  {name:'Crunch Rock', cfg:{board:['noisegate','compressor','tapedelay'], types:{preamp:'MS Crunch'}, on:{preamp:true,eq:true,cabinet:true,znr:true,comp:true,delay:true},
+  {name:'Z Clean', cfg:{board:['compressor','amp_fd_clean'],
+    params:{preamp:{Gain:24,Tone:48,Level:60}, eq:{Bass:52,Mid:48,Treble:55}, cabinet:{Depth:35,mic:'Dyna',pos:0}}}},
+  {name:'Crunch Rock', cfg:{board:['noisegate','compressor','amp_ms_crunch','tapedelay'],
     params:{preamp:{Gain:58,Tone:55,Level:62}, eq:{Bass:55,Mid:50,Treble:52}, cabinet:{Depth:45,mic:'Dyna',pos:1}, delay:{Time:18,FeedBack:15,Mix:18}}}},
-  {name:'Ambient Swell', cfg:{board:['compressor','chorus1','tapedelay','jvreverb'], types:{preamp:'VX Clean',mod:'Chorus'}, on:{preamp:true,eq:true,cabinet:true,comp:true,mod:true,delay:true,reverb:true},
+  {name:'Ambient Swell', cfg:{board:['compressor','amp_vx_clean','chorus1','tapedelay','jvreverb'],
     params:{preamp:{Gain:25,Tone:60,Level:55}, eq:{Bass:48,Mid:50,Treble:58}, mod:{P1:55,P2:20,P3:60,P4:45}, delay:{Time:60,FeedBack:48,Mix:42}, reverb:{Decay:75,Mix:55}}}},
-  {name:'Funk Wah', cfg:{board:['compressor','autowah'], types:{preamp:'BG Crunch',wah:'AutoWah'}, on:{preamp:true,eq:true,cabinet:true,comp:true,wah:true},
+  {name:'Funk Wah', cfg:{board:['compressor','autowah','amp_bg_crunch'],
     params:{preamp:{Gain:45,Tone:50,Level:60}, wah:{P1:65,P2:55,P3:50,P4:75}}}},
-  {name:'Metal Stack', cfg:{board:['noisegate','compressor','chorus2','tapedelay'], types:{preamp:'Z Stack',mod:'Flanger'}, on:{preamp:true,eq:true,cabinet:true,znr:true,comp:true,mod:true,delay:true},
+  {name:'Metal Stack', cfg:{board:['noisegate','compressor','amp_z_stack','chorus2','tapedelay'],
     params:{preamp:{Gain:88,Tone:48,Level:55}, eq:{Bass:58,Mid:42,Treble:48}, mod:{P1:25,P2:15,P3:30,P4:20}, delay:{Time:22,FeedBack:12,Mix:14}}}},
 ];
 
@@ -460,7 +471,7 @@ function connectChain(){
   Object.keys(audio.modules).forEach(id=> audio.modules[id].output.disconnect());
   let prev=audio.preChainBus;
   state.board.forEach(cid=>{ const slot=CATALOG[cid].slot; prev.connect(audio.modules[slot].input); prev=audio.modules[slot].output; });
-  ['preamp','eq','cabinet'].forEach(slot=>{ prev.connect(audio.modules[slot].input); prev=audio.modules[slot].output; });
+  ['eq','cabinet'].forEach(slot=>{ prev.connect(audio.modules[slot].input); prev=audio.modules[slot].output; });
   prev.connect(audio.masterGain);
 }
 const STRINGS=[{n:'E',f:82.41},{n:'A',f:110.00},{n:'D',f:146.83},{n:'G',f:196.00},{n:'B',f:246.94},{n:'e',f:329.63}];
@@ -542,9 +553,11 @@ function applyFullState(cfg){
   state.board=[...(cfg.board||[])];
   state.params=defaultParams();
   if(cfg.params) Object.keys(cfg.params).forEach(slot=>{ if(state.params[slot]) Object.assign(state.params[slot], cfg.params[slot]); });
-  state.types={preamp:'FD Clean'};
+  state.types={};
+  state.board.forEach(cid=>{ const e=CATALOG[cid]; if(e.type) state.types[e.slot]=e.type; });
   if(cfg.types) Object.assign(state.types, cfg.types);
-  state.on={preamp:true,eq:true,cabinet:true};
+  state.on={eq:true,cabinet:true};
+  state.board.forEach(cid=>{ state.on[CATALOG[cid].slot]=true; });
   if(cfg.on) Object.assign(state.on, cfg.on);
   state.master = cfg.master!=null? cfg.master : 70;
   if(audio){
@@ -747,20 +760,6 @@ function renderLibStrip(){
 
 function renderAmpRig(){
   ampGridEl.innerHTML='';
-
-  // PRE-AMP block
-  const ampBlock=document.createElement('div'); ampBlock.className='amp-block';
-  const ampLab=document.createElement('span'); ampLab.className='amp-block-label'; ampLab.textContent='AMP';
-  const ampFoot=document.createElement('div'); ampFoot.className='amp-foot'+(state.on.preamp?' on':'');
-  const ampRing=document.createElement('div'); ampRing.className='ring'; ampFoot.appendChild(ampRing);
-  ampFoot.onclick=()=>{ state.on.preamp=!state.on.preamp; markEdited(); if(audio) audio.modules.preamp.setOn(state.on.preamp, audio.ctx); renderAmpRig(); };
-  const ampSelect=document.createElement('select'); ampSelect.className='amp-select';
-  AMP_MODELS.forEach(([n])=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; if(n===state.types.preamp) o.selected=true; ampSelect.appendChild(o); });
-  ampSelect.onchange=()=>{ state.types.preamp=ampSelect.value; markEdited(); if(audio) audio.modules.preamp.setType(ampSelect.value); };
-  ampBlock.append(ampLab, ampFoot, ampSelect);
-  ['Gain','Tone','Level'].forEach(k=> ampBlock.appendChild(createKnob({label:k, value:state.params.preamp[k], onInput:(v)=>{
-    state.params.preamp[k]=v; markEdited(); if(audio) audio.modules.preamp.setParam(k,v); }})));
-  ampGridEl.appendChild(ampBlock);
 
   // EQ block
   const eqBlock=document.createElement('div'); eqBlock.className='amp-block';
